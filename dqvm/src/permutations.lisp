@@ -2,18 +2,16 @@
 ;;;
 ;;; Author: Juan M. Bello-Rivas
 
-(in-package :dqvm2)
-
-(declaim (optimize (speed 3) (debug 0) (safety 0)))
+(in-package #:dqvm2)
 
 (deftype permutation () 'list)
 
-(qvm::defun-inlinable permute (permutation address)
+(defun-inlinable permute (permutation address)
   (loop :for (i j) :in permutation
         :do (rotatef (ldb (byte 1 i) address) (ldb (byte 1 j) address))
         :finally (return address)))
 
-(qvm::defun-inlinable apply-qubit-permutation (qubit-permutation addresses &key from-end)
+(defun-inlinable apply-qubit-permutation (qubit-permutation addresses &key from-end)
   "Apply QUBIT-PERMUTATION to each amplitude address in ADDRESSES. Returns the permuted ADDRESSES. The inverse permutation is applied if FROM-END is not NIL.
 
 Permutations of qubits are represented as lists of pairs of qubit addresses (e.g., '((0 1) (1 2)) means \"swap qubits 0 and 1, then swap qubits 1 and 2\") with NIL representing the identity.
@@ -41,7 +39,7 @@ Example:
                          (reverse qubit-permutation)
                          qubit-permutation)))
     (etypecase addresses
-      (qvm::non-negative-fixnum (permute permutation addresses))
+      (a:non-negative-fixnum (permute permutation addresses))
       (array (loop :for i :from 0
                    :for address :across addresses
                    :do (setf (aref addresses i)
@@ -55,8 +53,8 @@ Example:
 (defun print-qubit-permutation (qubit-permutation number-of-qubits
                                 &optional (stream *standard-output*))
   "Print all transpositions in QUBIT-PERMUTATION involving up to NUMBER-OF-QUBITS."
-  (dotimes (i1 (ash 1 number-of-qubits) (values))
+  (dotimes (i1 (expt 2 number-of-qubits) (values))
     (let* ((i2 (apply-qubit-permutation qubit-permutation i1))
-           (aux (format nil "~~4d~~t|~~~d,'0b>" number-of-qubits))
-           (control-string (concatenate 'string aux "~t" aux "~%")))
+           (aux (format nil "~~4D~~T|~~~D,'0B>" number-of-qubits))
+           (control-string (concatenate 'string aux "~T" aux "~%")))
       (format stream control-string i1 i1 i2 i2))))

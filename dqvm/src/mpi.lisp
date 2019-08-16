@@ -2,15 +2,14 @@
 ;;;
 ;;; Author: Juan M. Bello-Rivas
 
-(cl:in-package #:dqvm2)
-
-(declaim (optimize (speed 3) (safety 0) (debug 0)))
+(in-package #:dqvm2)
 
 (defparameter +rank+ nil "MPI rank in the MPI_COMM_WORLD communicator.")
 
-(ecase qvm::+octets-per-cflonum+
-  (8 (define-symbol-macro +mpi-cflonum+ mpi::+mpi-complex+))
-  (16 (define-symbol-macro +mpi-cflonum+ mpi::+mpi-double-complex+)))
+(defconstant +mpi-cflonum+ (ecase qvm::+octets-per-cflonum+
+                             (8 mpi::+mpi-complex+)
+                             (16 mpi::+mpi-double-complex+))
+  "Size (in octets) per amplitude.")
 
 (defun bcast (&key (value 0) (type '(unsigned-byte 64)))
   "Broadcast a single VALUE of type ELEMENT-TYPE from MPI rank zero to all ranks. Returns the broadcasted VALUE."
@@ -59,12 +58,12 @@
 (defclass requests ()
   ((count
     :reader request-count
-    :type 'qvm::non-negative-fixnum
+    :type a:non-negative-fixnum
     :initform 0
     :documentation "Current number of MPI_Requests in use.")
    (total
     :reader total
-    :type 'qvm::non-negative-fixnum
+    :type a:non-negative-fixnum
     :initarg :total
     :initform (error-missing-initform :total)
     :documentation "Total number of MPI_Requests allocated.")
@@ -95,7 +94,7 @@
 
 (defmethod wait-all ((requests requests))
   (with-slots (count array-ptr) requests
-    ;; (format-log :debug "rank ~d is waiting for ~d pending requests."
-    ;;             (mpi-comm-rank) count)
+    ;; (format-log :debug "Rank ~D is waiting for ~D pending requests."
+    ;;             +rank+ count)
     (mpi::%mpi-waitall count array-ptr (cffi:null-pointer)))
   (reset-requests requests))

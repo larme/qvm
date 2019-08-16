@@ -3,9 +3,7 @@
 ;;; Author: Juan M. Bello-Rivas
 ;;;         Robert Smith
 
-(in-package :dqvm2)
-
-(declaim (optimize (speed 3) (debug 0) (safety 0)))
+(in-package #:dqvm2)
 
 (defmethod transition :around (qvm instr)
   ;; Ideally, we should make *trace-output* be a gateway to cl-syslog instead of adapting QVM's code here.
@@ -15,7 +13,7 @@
      (let ((start (get-internal-real-time))
            gc-time bytes-alloc)
        (multiple-value-prog1 (qvm::measuring-gc (gc-time bytes-alloc) (call-next-method))
-         ;; (format-log :debug "~a" qvm)
+         ;; (format-log :debug "~A" qvm)
 
          (format-log :debug "Transition ~A took ~D ms (gc: ~D ms; alloc: ~D bytes)"
                      (with-output-to-string (s) (cl-quil:print-instruction instr s))
@@ -25,7 +23,7 @@
                      bytes-alloc))))))
 
 (defmethod transition ((qvm distributed-qvm) (instr quil:gate-application))
-  (format-log :debug "Evaluating instruction ~a" (instruction->string instr))
+  (format-log :debug "Evaluating instruction ~A" (instruction->string instr))
 
   (apply-distributed-gate qvm instr)
 
@@ -43,7 +41,7 @@
       (measure qvm
                (quil:qubit-index (quil:measurement-qubit instr)))
     (when (zerop (mpi-comm-rank))
-      (format-log :info "~a -> ~d" instr cbit))
+      (format-log :info "~A -> ~D" instr cbit))
     ret-qvm))
 
 (defmethod transition ((qvm distributed-qvm) (instr quil:reset))
@@ -61,7 +59,7 @@
         (measure qvm q)
       (when (= 1 measured-bit)
         (let ((x-instr (aref (quil:parsed-program-executable-code
-                              (quil:parse-quil (format nil "X ~d" q)))
+                              (quil:parse-quil (format nil "X ~D" q)))
                              0)
                        ;; XXX Do something more elegant here.
                        ))

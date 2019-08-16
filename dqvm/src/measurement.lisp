@@ -1,9 +1,9 @@
 ;;; measurement.lisp
 ;;;
-;;; Authors: Juan M. Bello-Rivas
-;;;          Robert Smith
+;;; Author: Juan M. Bello-Rivas
+;;;         Robert Smith
 
-(in-package :dqvm2)
+(in-package #:dqvm2)
 
 (defmethod measure ((qvm distributed-qvm) q)
   (check-type q qvm::nat-tuple-element)
@@ -13,9 +13,7 @@
           (qvm:number-of-qubits qvm))
   (let* ((r (mt19937:random 1.0d0))
          (excited-probability (wavefunction-excited-state-probability (addresses qvm) (amplitudes qvm) q))
-         (cbit (mpi-broadcast-anything 0 :object (if (<= r excited-probability)
-                                                     1
-                                                     0))))
+         (cbit (mpi-broadcast-anything 0 :object (boolean-bit (<= r excited-probability)))))
 
     ;; Force the non-deterministic measurement.
     (force-measurement cbit q qvm excited-probability)
@@ -31,7 +29,7 @@
             (loop :for offset :from 0 :below number-of-addresses ; XXX parallelize
                   :for address := (get-address-by-offset addresses offset)
                   :when (logbitp q address)
-                    :summing (qvm::probability (aref amplitudes offset))
+                    :summing (qvm:probability (aref amplitudes offset))
                   double-float))
       (mpi::%mpi-allreduce value probability 1 mpi:+mpi-double+ mpi:+mpi-sum+ mpi:*standard-communicator*)
       (cffi:mem-ref probability :double))))

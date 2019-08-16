@@ -2,11 +2,9 @@
 ;;;
 ;;; Author: Juan M. Bello-Rivas
 
-(cl:in-package #:dqvm2)
+(in-package #:dqvm2)
 
-(declaim (optimize (speed 3) (safety 0) (debug 0)))
-
-(defparameter *logger* nil "Global logging facility (per MPI rank).")
+(defvar *logger* nil "Global logging facility (per MPI rank).")
 (defparameter *log-level* :debug "Default log level")
 
 (defun make-logger (name &key (maximum-priority *log-level*))
@@ -23,7 +21,7 @@
 
 (defun setup-logger (&optional message)
   "Easy set up of logger dynamic variable."
-  (setf *logger* (make-logger (format nil "dqvm-~d" (mpi-comm-rank))))
+  (setf *logger* (make-logger (format nil "dqvm-~D" (mpi-comm-rank))))
   (when (and message (zerop (mpi-comm-rank)))
     (format-log :info message))
 

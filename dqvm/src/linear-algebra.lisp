@@ -2,9 +2,7 @@
 ;;;
 ;;; Author: Juan M. Bello-Rivas
 
-(in-package :dqvm2)
-
-(declaim (optimize (speed 3) (safety 0) (debug 0)))
+(in-package #:dqvm2)
 
 (defun zgemv (ptr-a m n ptr-x ptr-y)
   "Specialized interface to the ZGEMV BLAS subroutine.
@@ -12,6 +10,7 @@
 Computes the matrix multiplication of matrix pointed to by PTR-A with the static vector pointed to by PTR-X and stores the result in the static vector pointed to by PTR-Y.
 
 The difference with MAGICL.BLAS-CFFI:%ZGEMV is that this interface allows for pointers to static vectors."
+  ;; XXX the following should depend on the type of QVM:CFLONUM.
   (cffi:with-foreign-objects ((ptr-m :int32)
                               (ptr-n :int32)
                               (inc :int32)
@@ -29,13 +28,13 @@ The difference with MAGICL.BLAS-CFFI:%ZGEMV is that this interface allows for po
     (magicl.blas-cffi::%%zgemv "N" ptr-m ptr-n alpha ptr-a ptr-m ptr-x inc
                                beta ptr-y inc)))
 
-(defun compute-matrix-vector-products (matrix input-array output-array)
+(defun compute-matrix-vector-products (matrix input-array output-array start-offset end-offset)
   "Loop over blocks and do the matrix-vector multiplications, $y = A x$, where A is MATRIX, INPUT-ARRAY is x, and OUTPUT-ARRAY is y."
   (magicl.cffi-types:with-array-pointers ((ptr-a (magicl::matrix-data matrix)))
+
     (loop :with stride := (magicl:matrix-cols matrix)
-          :with octets-per-cflonum := qvm::+octets-per-cflonum+
-          :for i :from 0 :below (length input-array) :by stride
-          :do (let* ((offset (* i octets-per-cflonum))
-                     (ptr-x (static-vector-pointer input-array :offset offset))
-                     (ptr-y (static-vector-pointer output-array :offset offset)))
+          :for i :from start-offset :below (min end-offset (length input-array)) :by stride
+          :do (let* ((pos (* i qvm::+octets-per-cflonum+))
+                     (ptr-x (static-vector-pointer input-array :offset pos))
+                     (ptr-y (static-vector-pointer output-array :offset pos)))
                 (zgemv ptr-a stride stride ptr-x ptr-y)))))

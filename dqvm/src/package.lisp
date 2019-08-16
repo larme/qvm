@@ -8,9 +8,12 @@
         #:cl-mpi-extensions
         #:static-vectors)
   (:local-nicknames (#:a #:alexandria))
-  (:import-from #:qvm #:transition)
-  (:export #:main
-           #:distributed-qvm
+  (:import-from #:qvm
+                #:boolean-bit
+                #:defun-inlinable
+                #:number-of-qubits
+                #:transition)
+  (:export #:distributed-qvm
            #:make-distributed-qvm
            #:print-qubit-permutation
            #:apply-qubit-permutation
@@ -28,7 +31,7 @@
            #:qubit-permutation
            #:number-of-addresses
            #:do-addresses
-           #:member-p
+           #:address-memberp
            #:offset-of
            #:get-rank
            #:get-address-by-offset

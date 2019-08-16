@@ -6,8 +6,6 @@
 
 (in-package #:dqvm2)
 
-(declaim (optimize (speed 3) (safety 0) (debug 0)))
-
 (defun error-missing-initform (symbol)
   (error "You must specify ~a" (prin1-to-string symbol)))
 

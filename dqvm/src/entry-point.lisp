@@ -2,16 +2,14 @@
 ;;;
 ;;; Author: Juan M. Bello-Rivas
 
-(cl:in-package #:dqvm2)
+(in-package #:dqvm2)
 
-(declaim (optimize (speed 3) (safety 0) (debug 0)))
-
-(defun run (argv)                       ; XXX change name, follow qvm-app.
+(defun %main (argv)                       ; XXX change name, follow qvm-app.
   (when (zerop +rank+)
-    (format-log :debug "Command line arguments: \"~{~a~^ ~}\"" argv)
+    (format-log :debug "Command line arguments: \"~{~A~^ ~}\"" argv)
 
     (unless (rest argv)
-      (format uiop/stream:*stderr* "Usage: ~a QUIL-FILE~%" (first argv))
+      (format uiop/stream:*stderr* "Usage: ~A QUIL-FILE~%" (first argv))
       (uiop:quit -1)))
 
   (let (qvm)
@@ -19,22 +17,24 @@
     (cond
       ((zerop +rank+)
        (let ((filename (second argv)))
-         (format-log :info "Reading Quil file ~s" filename)
+         (format-log :info "Reading Quil file ~S" filename)
          (let* ((program (quil:read-quil-file filename))
                 (number-of-qubits (quil:qubits-needed program)))
-           (format-log :info "Read program ~s using ~d total qubits. Code: ~{~a~^, ~}"
+           (format-log :info "Read program ~S using ~D total qubits. Code: ~{~A~^, ~}"
                        filename number-of-qubits
                        (map 'list #'instruction->string
                             (quil:parsed-program-executable-code program)))
            (bcast :value number-of-qubits)
-           (setf qvm (make-instance 'distributed-qvm :number-of-qubits number-of-qubits))
+           (setf qvm (make-distributed-qvm :number-of-qubits number-of-qubits))
            (load-instructions qvm (bcast-instructions program)))))
       (t
        (format-log :info "Waiting for instructions")
        (let ((number-of-qubits (bcast))
              (instructions (bcast-instructions)))
-         (setf qvm (make-instance 'distributed-qvm :number-of-qubits number-of-qubits))
+         (setf qvm (make-distributed-qvm :number-of-qubits number-of-qubits))
          (load-instructions qvm instructions))))
+
+    ;; (reset-wavefunction-debug qvm)
 
     (let ((seed (+ (nth-value 1 (sb-ext:get-time-of-day)) ; XXX SBCLism.
                    +rank+)))
@@ -42,7 +42,7 @@
         (qvm:run qvm)))
 
     (save-wavefunction qvm "wavefunction.dat")
-    ;; (print-reference-result qvm (second argv))
+    (print-reference-result qvm (second argv))
 
     (format-log :info "Finished program execution.")))
 
@@ -59,10 +59,10 @@
            (initial-wavefunction (magicl:make-complex-matrix m 1 components))
            (wavefunction (magicl:multiply-complex-matrices matrix initial-wavefunction)))
 
-      (format-log :info "Expected wavefunction:~%~{~a~%~}"
+      (format-log :info "Expected wavefunction:~%~{~A~%~}"
                   (coerce (magicl::matrix-data wavefunction) 'list)))))
 
-(defun main (argv)
+(defun entry-point (argv)
   (let ((*print-pretty* nil)
         (*print-case* :downcase)
         (qvm:*transition-verbose* t) ; XXX turn this on/off via command line args.
@@ -70,6 +70,7 @@
 
     (uiop/stream:setup-stderr)
 
+    ;; (trace compute-matrix-vector-products)
     ;; (regex-trace:regex-trace "^%MPI-.?(SEND|RECV|WAIT)" :print (mpi-comm-rank))
 
     (unless (mpi-initialized)
@@ -82,6 +83,6 @@
     (setup-logger "Welcome to the Rigetti Distributed Quantum Virtual Machine")
     (let ((status 0))
       (unwind-protect
-           (setf status (run argv))
+           (setf status (%main argv))
         (mpi-finalize)
         (uiop:quit status)))))

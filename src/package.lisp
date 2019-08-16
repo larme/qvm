@@ -21,7 +21,9 @@
 
   ;; utilities.lisp
   (:export
+   #:boolean-bit                        ; FUNCTION
    #:count-logical-cores                ; FUNCTION
+   #:defun-inlinable                    ; MACRO
    #:prepare-for-parallelization        ; FUNCTION
    #:seeded-random-state                ; FUNCTION
    #:with-random-state                  ; MACRO

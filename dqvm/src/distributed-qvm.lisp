@@ -2,48 +2,32 @@
 ;;;
 ;;; Author: Juan M. Bello-Rivas
 
-(in-package :dqvm2)
+(in-package #:dqvm2)
 
 (defclass distributed-qvm (qvm:classical-memory-mixin)
-  ((number-of-qubits
-    :reader number-of-qubits
-    :initarg :number-of-qubits
-    :type qvm::non-negative-fixnum
-    :initform (error-missing-initform :number-of-qubits)
-    :documentation "Number of qubits in the QVM.")
-   (rank
-    :reader rank
-    :initarg :rank
-    :initform (mpi-comm-rank)
-    :documentation "MPI rank in charge of this instance.")
-   (number-of-processes
-    :accessor number-of-processes
-    :initarg :number-of-processes
-    :initform (mpi-comm-size)
-    :documentation "Number of parallel MPI ranks.")
-   (addresses
+  ((addresses
     :accessor addresses
     :initarg :addresses
-    :initform nil ;(error-missing-initform :addresses)
-    :type 'addresses
+    :initform (error-missing-initform :addresses)
+    :type addresses
     :documentation "Address table.")
    (amplitudes
     :accessor amplitudes
     :initform nil
-    :type 'static-vector-pointer        ; 'qvm::quantum-state
+    :type static-vector-pointer        ; qvm::quantum-state
     :documentation "The components of the (permuted) wave function.")
    (scratch
     :accessor scratch
     :initform nil
-    :type 'static-vector-pointer
+    :type static-vector-pointer
     :documentation "Temporary memory to store amplitudes."))
 
   (:documentation "A distributed implementation of the Quantum Abstract Machine. A DQVM object keeps track of data owned by a single MPI rank."))
 
-(defun make-complex-static-vector (n)
-  "Create empty complex static vector of size N."
-  (make-static-vector n :element-type 'qvm:cflonum
-                        :initial-element (qvm:cflonum 0)))
+(defun make-distributed-qvm (&rest rest)
+  "Convenience function for instantiating DISTRIBUTED-QVM objects. The parameters are the same as the intargs of ADDRESSES."
+  (let* ((addresses (apply #'make-instance 'addresses rest)))
+    (make-instance 'distributed-qvm :addresses addresses)))
 
 (defmethod initialize-instance :after ((qvm distributed-qvm) &rest initargs)
   (declare (ignore initargs))
@@ -58,11 +42,27 @@
                                     (when amplitudes
                                       (free-static-vector amplitudes))))))
 
-(defmethod reset-wavefunction ((qvm distributed-qvm))
-  (with-slots (amplitudes scratch number-of-qubits rank number-of-processes)
-      qvm
+(defmethod qvm:number-of-qubits ((qvm distributed-qvm))
+  (number-of-qubits (addresses qvm)))
 
-    (let* ((maximum-arity (get-maximum-arity (qvm::program qvm)))
+(defmethod rank ((qvm distributed-qvm))
+  (rank (addresses qvm)))
+
+(defmethod number-of-processes ((qvm distributed-qvm))
+  (number-of-processes (addresses qvm)))
+
+(defun make-complex-static-vector (n)
+  "Create empty complex static vector of size N."
+  (make-static-vector n :element-type 'qvm:cflonum
+                        :initial-element (qvm:cflonum 0)))
+
+(defmethod reset-wavefunction ((qvm distributed-qvm))
+  (with-slots (amplitudes scratch) qvm
+
+    (let* ((rank (rank qvm))
+           (number-of-processes (number-of-processes qvm))
+           (number-of-qubits (number-of-qubits qvm))
+           (maximum-arity (get-maximum-arity (qvm::program qvm)))
            (block-size (if (plusp maximum-arity)
                            (* 2 maximum-arity)
                            *default-block-size*))
@@ -79,7 +79,7 @@
       (when amplitudes
         (free-static-vector amplitudes))
       (setf amplitudes (make-complex-static-vector number-of-addresses))
-      (when (member-p addresses 0)
+      (when (address-memberp addresses 0)
         (setf (aref (amplitudes qvm) (offset-of addresses 0))
               (qvm:cflonum 1)))
 
@@ -93,20 +93,9 @@
 (defmethod reset-wavefunction-debug ((qvm distributed-qvm))
   (with-slots (amplitudes addresses)
       qvm
-    (let ((i 0))                        ; XXX ugly but OK for the moment.
-      (do-addresses (address addresses)
-        (setf (aref amplitudes (offset-of addresses address)) (qvm:cflonum address))
-        (incf i)))))
-
-(defun make-distributed-qvm (rank number-of-processes number-of-qubits &optional permutation)
-  "Convenience function for instantiating DISTRIBUTED-QVM objects and optionally setting a permutation in its address table."
-  (let ((qvm (make-instance 'distributed-qvm :rank rank
-                                             :number-of-processes number-of-processes
-                                             :number-of-qubits number-of-qubits)))
-    (when permutation
-      (update-permutation (addresses qvm) permutation))
-
-    qvm))
+    (do-addresses (address addresses)
+      (setf (aref amplitudes (offset-of addresses address))
+            (qvm:cflonum address)))))
 
 (defun load-instructions (qvm instructions)
   "Load the code vector INSTRUCTIONS into QVM."
@@ -119,16 +108,12 @@
   (let ((*print-readably* nil)
         (*print-pretty* nil))
     (print-unreadable-object (qvm stream :type t :identity t)
-      (with-slots (rank number-of-processes number-of-qubits
-                   addresses amplitudes scratch)
+      (with-slots (addresses amplitudes scratch)
           qvm
-        (format stream "~a ~d ~a ~d ~a ~d ~a ~a ~a ~a ~a ~a"
-                (prin1-to-string :number-of-qubits) number-of-qubits
-                (prin1-to-string :rank) rank
-                (prin1-to-string :number-of-processes) number-of-processes
-                (prin1-to-string :addresses) addresses
-                (prin1-to-string :amplitudes) amplitudes
-                (prin1-to-string :scratch) scratch)))))
+        (format stream "~{~A ~A~^ ~}"
+                (list (prin1-to-string :addresses) addresses
+                      (prin1-to-string :amplitudes) amplitudes
+                      (prin1-to-string :scratch) scratch))))))
 
 (defun qubit-permutation (instruction)
   "Return an association list representing the qubits we must transpose to execute INSTRUCTION."
@@ -141,7 +126,7 @@
   "Save wavefunction in QVM to FILENAME in parallel.
 
 The file format is a consecutive set of bytes containing real and imaginary parts of the (ordered) amplitudes."
-  (format-log :debug "Saving wave function to ~s" filename)
+  (format-log :debug "Saving wave function to ~S" filename)
 
   (uiop:delete-file-if-exists filename)
 
